@@ -348,8 +348,7 @@ The **🐛 Copy Debug** button is only needed if some row shows `unrecognized-re
 ## Development
 
 ```bash
-npm test            # run the Node test suite (67 tests, no deps)
-node scripts/make-icons.js   # regenerate icons/icon-{16,48,128}.png
+npm test   # run the Node test suite (67 tests, no deps)
 ```
 
 Tests use Node's built-in test runner. They cover the pattern normalizer, the robots parser, the Google-response parser, and the HTML helpers. Everything else (orchestrator, fetch, Chrome APIs) is exercised manually in Chrome.
@@ -367,9 +366,7 @@ robots-disallow-checker/
 ├── results.html               # results tab markup
 ├── results.css                # results tab styles
 ├── results.js                 # results tab logic: banners, buttons, row upsert
-├── icons/                     # toolbar + extension icons (generated)
-├── scripts/
-│   └── make-icons.js          # zero-dep PNG generator
+├── icons/                     # toolbar + extension icons
 ├── lib/
 │   ├── robots-fetch.js        # HTTP fetch + status classification
 │   ├── robots-parser.js       # text → { googlebot[], wildcard[] }

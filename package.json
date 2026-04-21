@@ -10,7 +10,6 @@
     "url": "https://github.com/basgr/rtxt-index-stats.git"
   },
   "scripts": {
-    "test": "node --test test/*.test.js",
-    "icons": "node scripts/make-icons.js"
+    "test": "node --test test/*.test.js"
   }
 }
