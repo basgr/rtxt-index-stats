@@ -1,0 +1,9 @@
+User-agent: *
+Disallow: /admin/
+
+User-agent: Googlebot
+Disallow: /staging/
+Disallow: /private/
+
+User-agent: Bingbot
+Disallow: /bing-only/

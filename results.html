@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Robots Disallow Checker</title>
+<link rel="stylesheet" href="results.css">
+</head>
+<body>
+  <header>
+    <h1 id="host-title">Robots Disallow Checker</h1>
+    <div id="meta"></div>
+    <div class="header-actions">
+      <button id="stop-run" type="button" title="Stop the run (clears the queue; rows become 'stopped' and can be resumed)" hidden>⏸ Stop</button>
+      <button id="resume-run" type="button" title="Resume: re-enqueue all stopped rows" hidden>▶ Resume</button>
+      <button id="rescan" type="button" title="Re-read robots.txt and rebuild the run. Keeps cache, so already-queried rows come back instantly; only uncached rows re-fetch.">↺ Re-scan</button>
+      <button id="refresh-all" type="button" title="Wipe cache AND state, re-run every query from scratch. Expensive.">↻ Refresh all</button>
+    </div>
+  </header>
+
+  <section id="confirm-banner" hidden>
+    <strong>⚠ Large run</strong>
+    <span id="confirm-text"></span>
+    <button id="confirm-start" type="button">Start run</button>
+  </section>
+
+  <section id="captcha-banner" hidden>
+    <strong>⛔ Google is rate-limiting us.</strong>
+    <span>Open the verification page, solve the CAPTCHA there, then click Resume.</span>
+    <button id="open-google" type="button">Open verification page</button>
+    <button id="resume" type="button">Resume run</button>
+  </section>
+
+  <section id="progress">
+    <div id="progress-text"></div>
+    <div id="progress-bar"><div id="progress-fill"></div></div>
+  </section>
+
+  <table id="results">
+    <colgroup>
+      <col class="col-pattern">
+      <col class="col-query">
+      <col class="col-results">
+      <col class="col-status">
+      <col class="col-verify">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Pattern</th>
+        <th>Query</th>
+        <th class="th-results">Results</th>
+        <th>Status</th>
+        <th class="th-actions">Actions</th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+    <tfoot>
+      <tr>
+        <td colspan="2"><strong>Total indexed</strong></td>
+        <td id="total-indexed" class="results-cell"><strong>0</strong></td>
+        <td colspan="2"></td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <footer>
+    <div id="summary"></div>
+    <div class="exports">
+      <label class="export-filter" title="Only include rows with an indexed count greater than zero. Skipped / zero / errored / uncached rows are excluded.">
+        <input type="checkbox" id="only-indexed"> Only indexed (&gt; 0)
+      </label>
+      <button id="copy-tsv" type="button" title="Copy as tab-separated values">📋 Copy TSV</button>
+      <button id="copy-md" type="button" title="Copy as Markdown table">📋 Copy MD</button>
+      <button id="copy-debug" type="button" title="Copy the last unrecognized Google response (for debugging when rows show 'unrecognized-response')">🐛 Copy Debug</button>
+    </div>
+  </footer>
+
+  <script type="module" src="results.js"></script>
+</body>
+</html>

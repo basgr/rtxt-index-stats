@@ -1,0 +1,9 @@
+﻿# global header comment
+User-agent: Googlebot
+User-agent: AdsBot-Google
+Disallow: /no-ads/  # trailing comment
+Disallow: /shared/
+
+# unrelated
+User-agent: *
+Disallow: /

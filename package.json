@@ -1,0 +1,16 @@
+{
+  "name": "rxt-index-stats",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Chrome extension that audits which paths a site disallows in robots.txt and how many of them Google has indexed anyway.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/basgr/rxt-index-stats.git"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "icons": "node scripts/make-icons.js"
+  }
+}
