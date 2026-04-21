@@ -44,3 +44,11 @@ test('empty file yields empty groups', async () => {
   assert.deepEqual(result.googlebot, []);
   assert.deepEqual(result.wildcard, []);
 });
+
+test('blank line between User-agent and its first Disallow is insignificant (github.com style)', async () => {
+  const text = await fixture('blank-line-in-group.txt');
+  const result = parse(text);
+  // The `*` block has a blank line between the UA line and its disallows — they must still be collected.
+  assert.deepEqual(result.wildcard, ['/admin', '/secret']);
+  assert.deepEqual(result.googlebot, ['/gbot-only']);
+});
