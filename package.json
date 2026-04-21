@@ -1,5 +1,5 @@
 {
-  "name": "rxt-index-stats",
+  "name": "rtxt-index-stats",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -7,7 +7,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/basgr/rxt-index-stats.git"
+    "url": "https://github.com/basgr/rtxt-index-stats.git"
   },
   "scripts": {
     "test": "node --test test/*.test.js",
