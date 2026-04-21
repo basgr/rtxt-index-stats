@@ -253,10 +253,15 @@ function updateProgress() {
   const pct = queryable.length === 0 ? 100 : Math.round(done / queryable.length * 100);
   $('progress-fill').style.width = pct + '%';
 
-  const totalCount = rows
-    .filter(r => r.status === 'live' || r.status === 'cached')
-    .reduce((s, r) => s + (r.result?.count || 0), 0);
-  $('total-indexed').innerHTML = `<strong>${fmtNum(totalCount)}</strong>`;
+  const counted = rows.filter(r => r.status === 'live' || r.status === 'cached');
+  const totalCount = counted.reduce((s, r) => s + (r.result?.count || 0), 0);
+  // If any contributing row is approximate (and contributed a non-zero count),
+  // the total is itself approximate — surface that with the same `~` prefix
+  // we use on individual cells.
+  const totalApprox = totalCount > 0 && counted.some(r =>
+    (r.result?.count || 0) > 0 && (r.result?.approximate || r.approximate));
+  const prefix = totalApprox ? '~' : '';
+  $('total-indexed').innerHTML = `<strong>${prefix}${fmtNum(totalCount)}</strong>`;
 }
 
 function exportRows() {
