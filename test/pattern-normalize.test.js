@@ -11,15 +11,20 @@ test('plain prefix: /api → queryable site:host/api', () => {
   assert.equal(r.verifyUrl, 'https://www.google.com/search?q=site%3Awww.example.com%2Fapi&filter=0');
 });
 
-test('trailing slash: /api/ → site:host/api', () => {
+test('trailing slash is preserved: /api/ → site:host/api/ (narrower than /api)', () => {
   const r = normalize(HOST, '/api/');
   assert.equal(r.kind, 'queryable');
-  assert.equal(r.query, 'site:www.example.com/api');
+  assert.equal(r.query, 'site:www.example.com/api/');
 });
 
-test('trailing wildcard: /api/* → site:host/api', () => {
+test('trailing wildcard: /api/* → site:host/api/ (equivalent to /api/)', () => {
   const r = normalize(HOST, '/api/*');
   assert.equal(r.kind, 'queryable');
+  assert.equal(r.query, 'site:www.example.com/api/');
+});
+
+test('plain prefix without trailing slash stays unchanged: /api → site:host/api', () => {
+  const r = normalize(HOST, '/api');
   assert.equal(r.query, 'site:www.example.com/api');
 });
 
@@ -56,7 +61,7 @@ test('root / is skipped as not informative', () => {
 test('mid-path wildcard /private/*/edit becomes approximate inurl query', () => {
   const r = normalize(HOST, '/private/*/edit');
   assert.equal(r.kind, 'queryable');
-  assert.equal(r.query, 'site:www.example.com/private inurl:edit');
+  assert.equal(r.query, 'site:www.example.com/private/ inurl:edit');
   assert.equal(r.approximate, true);
 });
 
@@ -67,12 +72,17 @@ test('query-string pattern /*?session= becomes inurl approximate', () => {
   assert.equal(r.approximate, true);
 });
 
-test('normalizeAndDedupe: variants with same query collapse into one row', () => {
+test('normalizeAndDedupe: /api and /api/ are DIFFERENT rules and stay separate', () => {
+  // In robots.txt, `/api` blocks /api, /api.html, /api-bar AND /api/foo,
+  // while `/api/` only blocks URLs under /api/. They are NOT equivalent.
+  // /api/ and /api/* ARE equivalent (both block /api/...) so they merge.
   const rows = normalizeAndDedupe(HOST, ['/api', '/api/', '/api/*', '/wp-admin/']);
-  assert.equal(rows.length, 2);
-  const apiRow = rows.find(r => r.query === 'site:www.example.com/api');
-  assert.deepEqual(apiRow.variants, ['/api', '/api/', '/api/*']);
-  const wpRow = rows.find(r => r.query === 'site:www.example.com/wp-admin');
+  assert.equal(rows.length, 3);
+  const apiBare = rows.find(r => r.query === 'site:www.example.com/api');
+  assert.deepEqual(apiBare.variants, ['/api']);
+  const apiSlash = rows.find(r => r.query === 'site:www.example.com/api/');
+  assert.deepEqual(apiSlash.variants, ['/api/', '/api/*']);
+  const wpRow = rows.find(r => r.query === 'site:www.example.com/wp-admin/');
   assert.deepEqual(wpRow.variants, ['/wp-admin/']);
 });
 
@@ -116,21 +126,21 @@ test('trailing wildcard with slash: /tag*/ -> site:host/tag', () => {
 test('mid-path wildcard with literal suffix: /energieloesungen/*-form/ -> inurl approximate', () => {
   const r = normalize(HOST, '/energieloesungen/*-form/');
   assert.equal(r.kind, 'queryable');
-  assert.equal(r.query, 'site:www.example.com/energieloesungen inurl:form');
+  assert.equal(r.query, 'site:www.example.com/energieloesungen/ inurl:form');
   assert.equal(r.approximate, true);
 });
 
 test('mid-path wildcard nested: /energieloesungen/social/*-form/ -> inurl approximate', () => {
   const r = normalize(HOST, '/energieloesungen/social/*-form/');
   assert.equal(r.kind, 'queryable');
-  assert.equal(r.query, 'site:www.example.com/energieloesungen/social inurl:form');
+  assert.equal(r.query, 'site:www.example.com/energieloesungen/social/ inurl:form');
   assert.equal(r.approximate, true);
 });
 
 test('mid-path wildcard without trailing slash: /foo/*bar -> inurl approximate', () => {
   const r = normalize(HOST, '/foo/*bar');
   assert.equal(r.kind, 'queryable');
-  assert.equal(r.query, 'site:www.example.com/foo inurl:bar');
+  assert.equal(r.query, 'site:www.example.com/foo/ inurl:bar');
   assert.equal(r.approximate, true);
 });
 
@@ -143,9 +153,8 @@ test('plain prefix is NOT marked approximate', () => {
 test('mid-path wildcard with no usable suffix is still skipped', () => {
   const r = normalize(HOST, '/private/*/edit');
   // suffix "/edit" -> after stripping non-alnum: "edit" -> queryable
-  // Actually this WOULD now match. Let's verify the new behavior
   assert.equal(r.kind, 'queryable');
-  assert.equal(r.query, 'site:www.example.com/private inurl:edit');
+  assert.equal(r.query, 'site:www.example.com/private/ inurl:edit');
 });
 
 test('wildcard prefix and suffix: */feed/* -> site:host inurl:feed approximate', () => {
@@ -165,14 +174,14 @@ test('wildcard prefix only: */feed -> site:host inurl:feed', () => {
 test('multiple inurl terms: /foo/*/bar/*/baz', () => {
   const r = normalize(HOST, '/foo/*/bar/*/baz');
   assert.equal(r.kind, 'queryable');
-  assert.equal(r.query, 'site:www.example.com/foo inurl:bar inurl:baz');
+  assert.equal(r.query, 'site:www.example.com/foo/ inurl:bar inurl:baz');
   assert.equal(r.approximate, true);
 });
 
 test('duplicate literal segments deduped: /foo/*bar*bar', () => {
   const r = normalize(HOST, '/foo/*bar*bar');
   assert.equal(r.kind, 'queryable');
-  assert.equal(r.query, 'site:www.example.com/foo inurl:bar');
+  assert.equal(r.query, 'site:www.example.com/foo/ inurl:bar');
 });
 
 test('end-of-URL anchor: /ro/cautare-harta$ -> approximate site: query', () => {
@@ -200,7 +209,7 @@ test('plain URL-encoded path without $ is also decoded', () => {
 test('URL-encoded prefix in wildcard pattern is decoded', () => {
   const r = normalize(HOST, '/bg/%D0%BB%D0%B0%D0%B3%D0%B5%D1%80/*/media$');
   assert.equal(r.kind, 'queryable');
-  assert.equal(r.query, 'site:www.example.com/bg/лагер inurl:media');
+  assert.equal(r.query, 'site:www.example.com/bg/лагер/ inurl:media');
   assert.equal(r.approximate, true);
 });
 
@@ -222,25 +231,25 @@ test('dedupe with only $ variants stays approximate', () => {
 test('file extension after wildcard maps to filetype: not inurl:', () => {
   const r = normalize(HOST, '/img/*-wWIDTH*.jpg');
   assert.equal(r.kind, 'queryable');
-  assert.equal(r.query, 'site:www.example.com/img filetype:jpg inurl:wwidth');
+  assert.equal(r.query, 'site:www.example.com/img/ filetype:jpg inurl:wwidth');
 });
 
 test('simple wildcard with file extension: /img/*.jpg', () => {
   const r = normalize(HOST, '/img/*.jpg');
   assert.equal(r.kind, 'queryable');
-  assert.equal(r.query, 'site:www.example.com/img filetype:jpg');
+  assert.equal(r.query, 'site:www.example.com/img/ filetype:jpg');
 });
 
 test('extension uppercase normalized: /img/*.PNG', () => {
   const r = normalize(HOST, '/img/*.PNG');
   assert.equal(r.kind, 'queryable');
-  assert.equal(r.query, 'site:www.example.com/img filetype:png');
+  assert.equal(r.query, 'site:www.example.com/img/ filetype:png');
 });
 
 test('URL-encoded inurl term is decoded (Hungarian)', () => {
   const r = normalize(HOST, '/hu/taborhely/*/%C3%A9rdekl%C5%91dik/*');
   assert.equal(r.kind, 'queryable');
-  assert.equal(r.query, 'site:www.example.com/hu/taborhely inurl:érdeklődik');
+  assert.equal(r.query, 'site:www.example.com/hu/taborhely/ inurl:érdeklődik');
   assert.equal(r.approximate, true);
 });
 
@@ -266,7 +275,7 @@ test('query-string pattern multi-param: /*?ajax&wid', () => {
 test('query-string pattern with prefix: /foo/*?bar=baz', () => {
   const r = normalize(HOST, '/foo/*?bar=baz');
   assert.equal(r.kind, 'queryable');
-  assert.equal(r.query, 'site:www.example.com/foo inurl:bar inurl:baz');
+  assert.equal(r.query, 'site:www.example.com/foo/ inurl:bar inurl:baz');
 });
 
 test('query-string pattern with multiple params and dedup: /*?noredirect=true&config=standalone', () => {

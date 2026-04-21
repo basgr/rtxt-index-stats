@@ -160,17 +160,23 @@ Skipped rows show in the table with a `⚠ <reason>` status and dashes in Result
 | Pattern | Query | Approximate? |
 |---|---|---|
 | `/api` | `site:host/api` | no |
-| `/api/` | `site:host/api` | no |
-| `/api/*` | `site:host/api` | no |
+| `/api/` | `site:host/api/` | no |
+| `/api/*` | `site:host/api/` | no |
 | `/private/data` | `site:host/private/data` | no |
 | `/search*` | `site:host/search` | no |
 | `/de/search*` | `site:host/de/search` | no |
 | `/search*/` | `site:host/search` | no |
 | `/tag*/` | `site:host/tag` | no |
 
-Trailing `/`, `/*`, `*`, `*/` are all stripped — they all describe the same prefix in robots.txt. The three variants `/api`, `/api/`, `/api/*` collapse into one row with a `+2` badge.
+Trailing slashes are **preserved**, because in robots.txt `/api/` and `/api` are different rules:
+- `Disallow: /api/` only blocks URLs under `/api/…` (e.g. `/api/users`).
+- `Disallow: /api` blocks those plus `/api`, `/api.html`, `/api-legacy`, etc. — wider.
 
-This is the only case Google's `site:` operator actually matches the robots.txt pattern semantics cleanly, which is why these rows aren't marked approximate.
+So `/api` becomes `site:host/api` (wide prefix) and `/api/` becomes `site:host/api/` (narrow prefix). `/api/*` is equivalent to `/api/` (the `*` matches anything including empty), so those two collapse into one row with a `+1` badge. `/api` stays in its own row.
+
+`/search*` / `/tag*/` are trailing-wildcard patterns where there's no natural trailing slash in the prefix; they behave like broad prefixes.
+
+This is the case where Google's `site:` operator cleanly matches the robots.txt pattern, so rows aren't marked approximate.
 
 ### 3. End-of-URL anchor (`$`)
 
@@ -188,9 +194,9 @@ The `$` means "this URL exactly, nothing longer." Google's `site:` can't express
 | `/*.pdf$` | `site:host filetype:pdf` | no |
 | `*.json$` | `site:host filetype:json` | no |
 | `/*.PDF$` | `site:host filetype:pdf` (lowercased) | no |
-| `/img/*.jpg` | `site:host/img filetype:jpg` | no |
-| `/img/*.PNG` | `site:host/img filetype:png` | no |
-| `/img/*-wWIDTH*.jpg` | `site:host/img filetype:jpg inurl:wwidth` | yes |
+| `/img/*.jpg` | `site:host/img/ filetype:jpg` | no |
+| `/img/*.PNG` | `site:host/img/ filetype:png` | no |
+| `/img/*-wWIDTH*.jpg` | `site:host/img/ filetype:jpg inurl:wwidth` | yes |
 
 Anywhere the wildcard segments include a literal `.ext`, it becomes `filetype:ext`. The pattern can be anchored at root (`*.json$`) or scoped to a subdirectory (`/img/*.jpg`). Extensions are lowercased so `*.JPG` and `*.jpg` dedupe.
 
@@ -198,12 +204,12 @@ Anywhere the wildcard segments include a literal `.ext`, it becomes `filetype:ex
 
 | Pattern | Query | Approximate? |
 |---|---|---|
-| `/private/*/edit` | `site:host/private inurl:edit` | yes |
-| `/foo/*bar` | `site:host/foo inurl:bar` | yes |
-| `/energieloesungen/*-form/` | `site:host/energieloesungen inurl:form` | yes |
-| `/energieloesungen/social/*-form/` | `site:host/energieloesungen/social inurl:form` | yes |
-| `/foo/*/bar/*/baz` | `site:host/foo inurl:bar inurl:baz` | yes |
-| `/foo/*bar*bar` | `site:host/foo inurl:bar` (deduped) | yes |
+| `/private/*/edit` | `site:host/private/ inurl:edit` | yes |
+| `/foo/*bar` | `site:host/foo/ inurl:bar` | yes |
+| `/energieloesungen/*-form/` | `site:host/energieloesungen/ inurl:form` | yes |
+| `/energieloesungen/social/*-form/` | `site:host/energieloesungen/social/ inurl:form` | yes |
+| `/foo/*/bar/*/baz` | `site:host/foo/ inurl:bar inurl:baz` | yes |
+| `/foo/*bar*bar` | `site:host/foo/ inurl:bar` (deduped) | yes |
 
 The pattern is split on `*`. The first segment (if it starts with `/`) becomes a path prefix for `site:`. Every subsequent literal segment is sanitized — surrounding non-alphanumeric chars stripped, lowercased — and becomes an `inurl:` term. Duplicate terms are deduped.
 
@@ -225,7 +231,7 @@ When the pattern doesn't start with `/`, there's no path prefix — every litera
 | `/*?config` | `site:host inurl:config` | yes |
 | `/*?config=foo` | `site:host inurl:config inurl:foo` | yes |
 | `/*?ajax&wid` | `site:host inurl:ajax inurl:wid` | yes |
-| `/foo/*?bar=baz` | `site:host/foo inurl:bar inurl:baz` | yes |
+| `/foo/*?bar=baz` | `site:host/foo/ inurl:bar inurl:baz` | yes |
 | `/*?noredirect=true&config=standalone` | `site:host inurl:noredirect inurl:true inurl:config inurl:standalone` | yes |
 
 The pattern is split at the first `?`. The left side's first segment (if it starts with `/`) becomes the path prefix. The right side is tokenized on `&` and `=`; every non-empty token becomes an `inurl:` term.
@@ -237,8 +243,8 @@ Approximate — `inurl:` doesn't distinguish between "in the query string" and "
 | Pattern | Query |
 |---|---|
 | `/ru/%D0%BF%D0%BE%D0%B8%D1%81%D0%BA` | `site:host/ru/поиск` |
-| `/bg/%D0%BB%D0%B0%D0%B3%D0%B5%D1%80/*/media$` | `site:host/bg/лагер inurl:media` |
-| `/hu/taborhely/*/%C3%A9rdekl%C5%91dik/*` | `site:host/hu/taborhely inurl:érdeklődik` |
+| `/bg/%D0%BB%D0%B0%D0%B3%D0%B5%D1%80/*/media$` | `site:host/bg/лагер/ inurl:media` |
+| `/hu/taborhely/*/%C3%A9rdekl%C5%91dik/*` | `site:host/hu/taborhely/ inurl:érdeklődik` |
 
 Percent-encoded UTF-8 is decoded before building the query, both in path prefixes and in `inurl:` terms. The sanitizer uses Unicode-aware regexes (`\p{L}\p{N}`) so non-ASCII letters like `é`, `ő`, Cyrillic `п`, etc. are preserved.
 
