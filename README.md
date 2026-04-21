@@ -80,7 +80,7 @@ The results tab has five columns:
 | **Pattern** | The raw Disallow line from `robots.txt`, with a `+N` badge if multiple rules collapsed into this row (hover to see the other variants). |
 | **Query** | The Google search we ran. Click **↗** in the Actions column to re-run it in a real Google tab. |
 | **Results** | Indexed count. A `~` prefix means the count is approximate (see [approximate results](#exact-vs-approximate)). A dash means the row hasn't been queried yet, errored, or is a "skipped" rule. |
-| **Status** | `pending`, `fetching`, `✓ just now`, `✓ <timestamp>` (cached), `⏸ stopped`, `⛔ CAPTCHA`, `✗ <error>`, or `⚠ <reason>` for skipped rows. |
+| **Last fetched** | When the row last resolved: `pending`, `fetching`, `✓ just now`, `✓ <timestamp>` (cached), `⏸ stopped`, `⛔ CAPTCHA`, `✗ <error>`, or `⚠ <reason>` for skipped rows. |
 | **Actions** | **↗** opens the Google query in a new tab. **↻** refreshes just this row (bypasses cache, goes to the front of the throttle queue). |
 
 Header buttons:
@@ -95,7 +95,7 @@ Banners (at most one visible at a time, driven by run state):
 - **⚠ Large run** — fires when more than 50 uncached rules would need to be queried. Google-side rate limiting means that's >8 minutes minimum. Click *Start run* to proceed, or just close the tab.
 - **⛔ CAPTCHA** — Google blocked us. Click *Open verification page*, solve the CAPTCHA in a real tab, then come back and click *Resume*.
 
-Footer: progress bar, total indexed count across queried rows, and export buttons (TSV / Markdown / debug snapshot). The **Only indexed (> 0)** checkbox filters zero-count, skipped, and errored rows out of the export — useful for client deliverables where zeros are just noise.
+Footer: progress bar, total indexed count across queried rows, and export buttons (TSV / Markdown / debug snapshot). The total carries a `~` prefix when any contributing row is approximate. The **Only indexed (> 0)** checkbox filters zero-count, skipped, and errored rows out of the export — useful for client deliverables where zeros are just noise.
 
 ---
 
