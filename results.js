@@ -223,7 +223,7 @@ function upsertRow(row) {
 
 function renderRow(row) {
   const variantBadge = row.variants && row.variants.length > 1
-    ? ` <span title="Also matches: ${escapeHtml(row.variants.slice(1).join(', '))}">+${row.variants.length - 1}</span>`
+    ? ` <span class="variant-badge" tabindex="0" title="Also matches: ${escapeHtml(row.variants.slice(1).join(', '))}">+${row.variants.length - 1} <span class="variant-badge-icon">ⓘ</span></span>`
     : '';
   const patternCell = `<code>${escapeHtml(row.raw)}</code>${variantBadge}`;
 

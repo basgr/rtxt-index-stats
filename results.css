@@ -34,6 +34,19 @@ th.sortable:hover { background: #eceff3; }
 th.sortable.is-active { background: #e7f0ff; color: #1f6feb; }
 .sort-ind { display: inline-block; width: 10px; margin-left: 4px; font-size: 10px; color: #c0c4ca; }
 th.sortable.is-active .sort-ind { color: #1f6feb; }
+/* Hover preview: show a faint arrow on idle sortable headers so users
+   discover they're clickable. Active headers keep their own arrow. */
+th.sortable:not(.is-active):hover .sort-ind::after { content: '▲'; color: #9aa1ab; }
+.variant-badge {
+  display: inline-flex; align-items: center; gap: 2px;
+  margin-left: 6px; padding: 1px 6px;
+  font-size: 11px; font-weight: 500;
+  color: #1f6feb; background: #e7f0ff;
+  border-radius: 10px;
+  cursor: help;
+}
+.variant-badge:hover, .variant-badge:focus { background: #d0e1ff; outline: none; }
+.variant-badge-icon { font-size: 10px; opacity: 0.8; }
 .results-cell { font-variant-numeric: tabular-nums; text-align: right; }
 .row-actions { text-align: center; }
 .status-fetching { color: #1f6feb; font-weight: 500; }
