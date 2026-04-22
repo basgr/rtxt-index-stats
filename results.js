@@ -75,6 +75,10 @@ async function init() {
     alert(`Copied ${text.length} bytes to clipboard. Paste it back so we can update the parser.`);
   });
 
+  for (const th of document.querySelectorAll('th.sortable')) {
+    th.addEventListener('click', () => onSortHeaderClick(th));
+  }
+
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.host !== host) return;
     if (msg.type === 'run:meta') onMeta(msg);
@@ -138,6 +142,68 @@ function describeRobotsStatus(status, robots) {
 
 const rowsByQuery = new Map();
 
+// ---- sorting --------------------------------------------------------------
+// Sort state is per-tab session. null/null = original parse order from rowsByQuery.
+let sortState = { column: null, direction: null };
+
+const SORT_KEYS = {
+  pattern:     r => (r.raw ?? '').toLowerCase(),
+  query:       r => r.query?.toLowerCase(),
+  results:     r => r.result?.count,
+  lastFetched: r => r.result?.fetchedAt,
+};
+
+function compareRows(a, b) {
+  const extract = SORT_KEYS[sortState.column];
+  const va = extract(a);
+  const vb = extract(b);
+  // Missing values always sort to the end, regardless of direction.
+  const aMissing = va == null || va === '';
+  const bMissing = vb == null || vb === '';
+  if (aMissing && bMissing) return 0;
+  if (aMissing) return 1;
+  if (bMissing) return -1;
+  const cmp = typeof va === 'number'
+    ? va - vb
+    : String(va).localeCompare(String(vb));
+  return sortState.direction === 'desc' ? -cmp : cmp;
+}
+
+function applySort() {
+  // Update header indicators.
+  for (const th of document.querySelectorAll('th.sortable')) {
+    const active = th.dataset.sortKey === sortState.column;
+    th.classList.toggle('is-active', active);
+    const ind = th.querySelector('.sort-ind');
+    if (!ind) continue;
+    ind.textContent = active ? (sortState.direction === 'desc' ? '▼' : '▲') : '';
+  }
+  // Reorder DOM. Insertion order of rowsByQuery is the parse order; that's
+  // our default. appendChild on an existing node moves it (no clone, so
+  // listeners survive).
+  const tbody = $('rows');
+  const ordered = sortState.column
+    ? [...rowsByQuery.values()].sort(compareRows)
+    : [...rowsByQuery.values()];
+  for (const row of ordered) {
+    const k = row.query || row.raw;
+    const tr = tbody.querySelector(`tr[data-key="${cssEscape(k)}"]`);
+    if (tr) tbody.appendChild(tr);
+  }
+}
+
+function onSortHeaderClick(th) {
+  const col = th.dataset.sortKey;
+  if (sortState.column !== col) {
+    sortState = { column: col, direction: 'asc' };
+  } else if (sortState.direction === 'asc') {
+    sortState.direction = 'desc';
+  } else {
+    sortState = { column: null, direction: null };
+  }
+  applySort();
+}
+
 function upsertRow(row) {
   const k = row.query || row.raw;
   rowsByQuery.set(k, row);
@@ -151,6 +217,7 @@ function upsertRow(row) {
   tr.querySelector('.refresh-row')?.addEventListener('click', () => {
     chrome.runtime.sendMessage({ type: 'refreshRow', host, query: row.query });
   });
+  if (sortState.column) applySort();
   updateProgress();
 }
 

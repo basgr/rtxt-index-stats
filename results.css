@@ -29,6 +29,11 @@ td code { white-space: normal; }
 th { background: #f6f8fa; font-weight: 600; }
 .th-results { text-align: right; }
 .th-actions { text-align: center; }
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { background: #eceff3; }
+th.sortable.is-active { background: #e7f0ff; color: #1f6feb; }
+.sort-ind { display: inline-block; width: 10px; margin-left: 4px; font-size: 10px; color: #c0c4ca; }
+th.sortable.is-active .sort-ind { color: #1f6feb; }
 .results-cell { font-variant-numeric: tabular-nums; text-align: right; }
 .row-actions { text-align: center; }
 .status-fetching { color: #1f6feb; font-weight: 500; }
