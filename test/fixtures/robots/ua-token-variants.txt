@@ -1,0 +1,11 @@
+User-agent: Googlebot/2.1
+Disallow: /version-suffix
+
+User-agent: Googlebot Images
+Disallow: /trailing-junk
+
+User-agent: * extra ignored
+Disallow: /global
+
+User-agent: Bingbot/3.0
+Disallow: /bing-only

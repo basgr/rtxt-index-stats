@@ -52,3 +52,29 @@ test('blank line between User-agent and its first Disallow is insignificant (git
   assert.deepEqual(result.wildcard, ['/admin', '/secret']);
   assert.deepEqual(result.googlebot, ['/gbot-only']);
 });
+
+test('User-agent value is reduced to product token (Googlebot/2.1, Googlebot Images, * junk)', async () => {
+  const text = await fixture('ua-token-variants.txt');
+  const result = parse(text);
+  // Googlebot/2.1 and "Googlebot Images" both produce token `googlebot`.
+  assert.deepEqual(result.googlebot, ['/version-suffix', '/trailing-junk']);
+  // `* extra ignored` is recognized as the global token.
+  assert.deepEqual(result.wildcard, ['/global']);
+  // Bingbot/3.0 is parsed as bingbot but not relevant to either output list.
+});
+
+test('common directive typos (disalow, dissallow, useragent, "user agent") are tolerated', async () => {
+  const text = await fixture('directive-typos.txt');
+  const result = parse(text);
+  assert.deepEqual(result.googlebot, [
+    '/typo-disalow', '/typo-dissallow', '/typo-diasllow', '/typo-disallaw', '/typo-dissalow',
+  ]);
+  assert.deepEqual(result.wildcard, ['/global-typo-ua']);
+});
+
+test('bare \\r line endings (classic Mac) are recognized', () => {
+  const text = 'User-agent: Googlebot\rDisallow: /mac\rUser-agent: *\rDisallow: /every\r';
+  const result = parse(text);
+  assert.deepEqual(result.googlebot, ['/mac']);
+  assert.deepEqual(result.wildcard, ['/every']);
+});

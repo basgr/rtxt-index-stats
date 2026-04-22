@@ -1,0 +1,9 @@
+useragent: Googlebot
+Disalow: /typo-disalow
+Dissallow: /typo-dissallow
+Diasllow: /typo-diasllow
+Disallaw: /typo-disallaw
+Dissalow: /typo-dissalow
+
+User agent: *
+disallow: /global-typo-ua

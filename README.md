@@ -122,6 +122,19 @@ It ignores other crawlers (Bingbot, etc.), ignores `Allow`, `Sitemap`, `Crawl-de
 
 The two lists (Googlebot + wildcard) are concatenated and deduped in-order before being handed to the normalizer.
 
+### Compatibility with Google's reference parser
+
+Tokenization and grouping match Google's open-source [robots.txt parser](https://github.com/google/robotstxt). Specifically:
+
+- All three line endings work: `\n`, `\r\n`, and bare `\r` (classic Mac).
+- Blank lines inside a group are insignificant. A group seals only when a new `User-agent:` follows any body directive — so files like `github.com/robots.txt` that put a blank line between `User-agent: *` and its first `Disallow:` parse correctly.
+- The `User-agent:` value is reduced to its product token via `[A-Za-z_-]+`. So `Googlebot/2.1` and `Googlebot Images` both match `googlebot`. `*` is the global token even with trailing junk (`User-agent: * ignored`).
+- Common directive typos are tolerated: `Disalow`, `Dissallow`, `Diasllow`, `Disallaw`, `Dissalow`, `useragent`, `user agent`. They're treated as their canonical forms — same as Google does.
+
+What we **don't** do that Google does, and the implication:
+
+- Google's contract: if any Googlebot-specific group exists, the `*` group is ignored entirely for Googlebot. We instead concatenate `*` + `Googlebot` rules. That gives a **conservative bias** for an audit tool — we may report a URL as Disallowed that Googlebot is in fact allowed to crawl. False positives, never false negatives. Worth keeping in mind when reading the report.
+
 ---
 
 ## Pattern normalization: deep dive
