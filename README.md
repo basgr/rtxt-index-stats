@@ -1,8 +1,8 @@
 # Robots Disallow Checker
 
-Chrome extension for SEO audits. Click the icon on any http(s) page; the extension fetches the site's `robots.txt`, extracts the Disallow rules that apply to Googlebot, converts each one into a Google `site:` query, and shows how many URLs Google has indexed under each disallowed pattern.
+This extension fetches the site's robots.txt, extracts the Disallow rules that apply to Googlebot, converts each one into a Google `site:` query, and shows how many URLs Google keeps in their index under each disallowed pattern.
 
-The point: a site can ask Google not to crawl certain paths, but those URLs can still end up in the index. This tool makes it easy to spot where that's happening at scale.
+Because: A site can ask Googlebot not to crawl certain paths, but those URLs can still end up in the index. This tool makes it easy to spot where that's happening at scale.
 
 ![Toolbar icon](icons/icon-128.png)
 
@@ -11,14 +11,11 @@ The point: a site can ask Google not to crawl certain paths, but those URLs can 
 ## Table of contents
 
 - [Install](#install)
-- [How it works](#how-it-works)
 - [The UI](#the-ui)
 - [Robots.txt parsing](#robotstxt-parsing)
 - [Pattern normalization: deep dive](#pattern-normalization-deep-dive)
 - [Google query execution](#google-query-execution)
-- [Run state machine](#run-state-machine)
-- [Caching and storage](#caching-and-storage)
-- [Exporting results](#exporting-results)
+- [State and storage](#state-and-storage)
 - [Development](#development)
 - [File map](#file-map)
 - [Known limitations](#known-limitations)
@@ -27,47 +24,10 @@ The point: a site can ask Google not to crawl certain paths, but those URLs can 
 
 ## Install
 
-1. Open `chrome://extensions` and toggle **Developer mode** (top right).
-2. Click **Load unpacked** and select this directory.
-3. Pin the extension. Click the toolbar icon while on any http(s) page.
-
-No build step, no runtime dependencies. Manifest V3, service-worker background, vanilla JS ES modules.
-
----
-
-## How it works
-
-```
-  ┌──────────────────┐
-  │ icon click on    │
-  │ example.com      │
-  └───────┬──────────┘
-          │
-          ▼
-  ┌──────────────────┐     ┌─────────────────────────────┐
-  │ fetch robots.txt │────▶│ parse: Googlebot + *  blocks │
-  └──────────────────┘     └───────────────┬─────────────┘
-                                           │
-                                           ▼
-                           ┌────────────────────────────────┐
-                           │ normalize each Disallow line → │
-                           │ Google site:/inurl:/filetype:  │
-                           │ query   (+ dedupe variants)    │
-                           └───────────────┬────────────────┘
-                                           │
-                                           ▼
-                           ┌────────────────────────────────┐
-                           │ for each query: cache hit?     │
-                           │   yes → use cached count       │
-                           │   no  → throttled fetch (10-30s)│
-                           └───────────────┬────────────────┘
-                                           │
-                                           ▼
-                           ┌────────────────────────────────┐
-                           │ results tab: pattern | query | │
-                           │ count | status | actions       │
-                           └────────────────────────────────┘
-```
+1. Get the code: `git clone https://github.com/basgr/rtxt-index-stats.git`, or download via **<> Code > Download ZIP** and unzip.
+2. Open `chrome://extensions` and toggle **Developer mode** (top right).
+3. Click **Load unpacked** and select the project directory.
+4. Pin the extension. Click the toolbar icon while on any http(s) page.
 
 ---
 
@@ -92,10 +52,10 @@ Header buttons:
 
 Banners (at most one visible at a time, driven by run state):
 
-- **⚠ Large run** — fires when more than 50 uncached rules would need to be queried. Google-side rate limiting means that's >8 minutes minimum. Click *Start run* to proceed, or just close the tab.
-- **⛔ CAPTCHA** — Google blocked us. Click *Open verification page*, solve the CAPTCHA in a real tab, then come back and click *Resume*.
+- **⚠ Large run** — fires when more than 50 uncached rules need to be queried. See [Rate limiting](#rate-limiting) for what that costs in time. Click *Start run* to proceed, or just close the tab.
+- **⛔ CAPTCHA** — Google blocked us. See [CAPTCHA recovery](#captcha-recovery).
 
-Footer: progress bar, total indexed count across queried rows, and export buttons (TSV / Markdown / debug snapshot). The total carries a `~` prefix when any contributing row is approximate. The **Only indexed (> 0)** checkbox filters zero-count, skipped, and errored rows out of the export — useful for client deliverables where zeros are just noise.
+Footer: total indexed count across queried rows and export buttons. **📋 Copy TSV** / **📋 Copy MD** copy the visible table for pasting into a spreadsheet or doc. The total carries a `~` prefix when any contributing row is approximate. The **Only indexed (> 0)** checkbox filters zero-count, skipped, and errored rows out of the export. **🐛 Copy Debug** is only needed if a row shows `unrecognized-response` — it copies the saved Google response body so the parser can be updated.
 
 ---
 
@@ -114,13 +74,9 @@ The fetch layer (`lib/robots-fetch.js`) handles the common failure modes explici
 | `networkError` | DNS/TLS/connection failure. |
 | `timeout` | Didn't respond within 15s. |
 
-On `ok`, the parser (`lib/robots-parser.js`) pulls out the `Disallow` values from:
-- Every `User-agent: Googlebot` block.
-- Every `User-agent: *` block.
+On `ok`, the parser (`lib/robots-parser.js`) pulls out the `Disallow` values from every `User-agent: Googlebot` block and every `User-agent: *` block, strips BOM and inline `#` comments, and drops empty-valued `Disallow:` lines (which mean "allow everything"). The two lists are concatenated and deduped in-order before being handed to the normalizer.
 
-It ignores other crawlers (Bingbot, etc.), ignores `Allow`, `Sitemap`, `Crawl-delay`, and `Host`, strips BOM and inline `#` comments, and drops empty-valued `Disallow:` lines (which mean "allow everything" in robots.txt semantics).
-
-The two lists (Googlebot + wildcard) are concatenated and deduped in-order before being handed to the normalizer.
+Other crawler blocks (Bingbot, etc.) and other directives (`Allow`, `Sitemap`, `Crawl-delay`, `Host`) are out of scope — see [Known limitations](#known-limitations).
 
 ### Compatibility with Google's reference parser
 
@@ -294,80 +250,41 @@ Request timeout is 30s (AbortController). On error the row goes to `error` statu
 
 Queries are serialized through a single throttle (`lib/throttle.js`) with a **random 10–30 second delay** between every request. The delay is scheduled via `chrome.alarms` so the MV3 service worker can be killed between requests without losing the queue. Cache hits bypass the throttle entirely.
 
+That cap means a 50-rule run takes **8–25 minutes** of wall time, and a 100-rule run takes **17–50 minutes**. Anything over 50 uncached rules gets gated behind the **⚠ Large run** banner so you can choose to wait or close the tab.
+
 ### CAPTCHA recovery
 
-On CAPTCHA, the throttle pauses and the UI shows the ⛔ banner. The user solves the CAPTCHA in a normal Google tab (via the *Open verification page* button), then clicks *Resume*. The blocked row goes to the front of the queue and the throttle resumes.
+When Google decides our traffic looks too bot-like, it serves a CAPTCHA page. The parser detects this (URL contains `sorry/index`, body contains `unusual traffic`, or HTTP 429) and:
+
+1. The throttle pauses — no more requests go out.
+2. The blocked row gets `⛔ CAPTCHA` status.
+3. The **⛔ CAPTCHA** banner shows up in the UI with two buttons.
+
+To recover: click *Open verification page*, solve the CAPTCHA in that real Google tab, then come back to the results tab and click *Resume*. The blocked row goes to the front of the queue and the throttle resumes.
+
+CAPTCHA is unavoidable at scale; expect to solve one or two during a large audit.
 
 ---
 
-## Run state machine
+## State and storage
 
-Every host has one persisted `run:<host>` record with a single authoritative `runStatus`:
+Every host has one persisted run record (`run:<host>`) and a per-query result cache (`cache:<host>:<query>`), both in `chrome.storage.local`. Results are cached for **7 days**.
 
-```
-                   ┌──────────┐
-                   │  none    │
-                   └────┬─────┘
-                        │ icon click  (≤ 50 uncached)
-                        │ icon click  (> 50 uncached)
-               ┌────────┴────────────┐
-               ▼                     ▼
-       ┌─────────────┐      ┌────────────────────────┐
-       │  running    │◀─────│ awaiting-confirmation  │
-       │             │ Start│                        │
-       └──┬──────────┘ Run  └────────────────────────┘
-          │  ▲  ▲                ▲
-   Stop   │  │  │ Resume        │ (re-open tab → replay only)
-          ▼  │  │                │
-       ┌──────┴──┴──┐     ┌──────┴──────────┐
-       │paused-stop │     │paused-captcha   │
-       └────────────┘     └─────────────────┘
-          │                      ▲
-   last ▼ row done               │ CAPTCHA
-       ┌────────────┐            │
-       │    done    │────────────┘
-       └────────────┘
-```
+The run carries a single `runStatus` — `running`, `awaiting-confirmation`, `paused-stopped`, `paused-captcha`, or `done` — that drives which banners and buttons the UI shows.
 
-**Invariants the code enforces:**
+Two behaviors worth knowing:
 
-- **Opening the tab never starts work.** doRun on an existing state replays it and exits. Only explicit user actions (`Start run`, `Resume`, `Resume after CAPTCHA`, `Refresh all`, `Re-scan`, row `↻`) enqueue fetches.
-- `resumeAllPending()` on SW boot re-enqueues only rows in `running` state. A paused run stays paused across service-worker restarts.
-- Banners + header buttons are all derived from `runStatus`, not from per-row scans, so they can't disagree. Every transition broadcasts a `run:state` message so the UI updates immediately.
-- An in-flight fetch that completes after Stop never promotes `paused-stopped` to `done`.
+- **Opening the tab never starts work.** The extension only fetches when you press *Start*, *Resume*, *Refresh all*, *Re-scan*, or a row's `↻`. Reopening replays the persisted state — banners, rows, and buttons reflect where the run was when you last left it.
+- **Paused runs stay paused** across service-worker restarts. Only `running` rows auto-resume on SW boot.
 
----
-
-## Caching and storage
-
-Keys live under `chrome.storage.local`:
-
-| Key | Shape | Purpose |
-|---|---|---|
-| `cache:<host>:<query>` | `{ count, fetchedAt, approximate }` | 7-day TTL result cache. Entries past TTL read as misses. |
-| `run:<host>` | `{ host, startedAt, robotsStatus, robots, rules[], runStatus }` | One row per host. Drives replay + resume. |
-| `debug:lastUnrecognized` | `{ url, at, body }` | Last unparseable Google response, for debugging. |
-
-TTL is 7 days (`lib/cache.js`). Re-scan and Refresh-all share the rebuild path; only Refresh-all also wipes `cache:<host>:*`.
-
----
-
-## Exporting results
-
-The footer has two copy buttons and a filter:
-
-- **📋 Copy TSV** — tab-separated, columns: `raw pattern`, `query`, `count`, `status`. No header row. Paste straight into a spreadsheet.
-- **📋 Copy MD** — Markdown table with a header. Paste into a doc / ticket / PR description.
-- **Only indexed (> 0)** — checkbox to the left of the buttons. Filters out skipped, errored, zero-count, and uncached rows so the export contains only the rules that actually have indexed URLs.
-
-The **🐛 Copy Debug** button is only needed if some row shows `unrecognized-response` — it copies the saved HTML body so the Google-response parser can be updated.
+**Re-scan** vs **Refresh all**: Re-scan re-reads `robots.txt` and rebuilds the run but keeps the result cache, so already-answered rows return instantly. Refresh all wipes the cache too and re-queries every rule from scratch.
 
 ---
 
 ## Development
 
 ```bash
-npm test   # run the Node test suite (67 tests, no deps)
+npm test   # run the Node test suite (72 tests, no deps)
 ```
 
 Tests use Node's built-in test runner. They cover the pattern normalizer, the robots parser, the Google-response parser, and the HTML helpers. Everything else (orchestrator, fetch, Chrome APIs) is exercised manually in Chrome.
@@ -379,7 +296,7 @@ There is no build step and no runtime dependency. The project is vanilla JS ES m
 ## File map
 
 ```
-robots-disallow-checker/
+rtxt-index-stats/
 ├── manifest.json              # MV3: permissions, action, service worker
 ├── background.js              # SW entry: icon click, message router, boot resume
 ├── results.html               # results tab markup
@@ -408,11 +325,9 @@ robots-disallow-checker/
 
 ## Known limitations
 
-- **No Allow: handling.** `robots.txt` supports `Allow:` rules that carve exceptions out of a broader `Disallow:`. This tool treats every `Disallow` as a flat blacklist entry; it doesn't attempt to subtract Allow paths. For audit purposes that's usually fine (the count is still an *upper bound* on what's covered), but be aware.
+- **Other crawlers and other directives are out of scope.** Only `User-agent: Googlebot` and `User-agent: *` blocks are read. `Allow:`, `Sitemap:`, `Crawl-delay:`, and `Host:` are ignored. Notably, `Allow:` rules that carve exceptions out of a broader `Disallow:` are not subtracted — every Disallow is treated as a flat blacklist entry. Counts remain a useful *upper bound* for audit purposes; just don't read them as exact.
 - **Google is a prefix-matcher, robots.txt isn't quite.** See the [exact vs. approximate](#exact-vs-approximate) discussion above. Counts marked with `~` or with a `$` variant in the `+N` badge should be read as upper / lower bounds, not exact.
 - **Google's result counts are inherently fuzzy.** Google sometimes reports "About N results" that changes between requests. Counts near zero and very large counts are more reliable than mid-range ones.
-- **Rate limits.** Running 100+ queries takes half an hour at a minimum. A `>50` uncached-rule run is gated behind a confirmation prompt for that reason.
-- **CAPTCHA is inevitable at scale.** The throttle minimizes it but doesn't eliminate it; plan to solve one or two for large audits. Use the Resume flow.
 - **Single Chrome profile.** The fetch goes out with whatever cookies + UA the user has in Chrome. Running from a profile that's signed into Google is fine; running from one that isn't is also fine. The counts are public.
 
 ---
