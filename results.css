@@ -46,7 +46,6 @@ th.sortable:not(.is-active):hover .sort-ind::after { content: '▲'; color: #9aa
   cursor: help;
 }
 .variant-badge:hover, .variant-badge:focus { background: #d0e1ff; outline: none; }
-.variant-badge-icon { font-size: 10px; opacity: 0.8; }
 .results-cell { font-variant-numeric: tabular-nums; text-align: right; }
 .row-actions { text-align: center; }
 .status-fetching { color: #1f6feb; font-weight: 500; }

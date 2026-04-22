@@ -223,7 +223,7 @@ function upsertRow(row) {
 
 function renderRow(row) {
   const variantBadge = row.variants && row.variants.length > 1
-    ? ` <span class="variant-badge" tabindex="0" title="Also matches: ${escapeHtml(row.variants.slice(1).join(', '))}">+${row.variants.length - 1} <span class="variant-badge-icon">ⓘ</span></span>`
+    ? ` <span class="variant-badge" tabindex="0" title="Also matches: ${escapeHtml(row.variants.slice(1).join(', '))}">+${row.variants.length - 1}</span>`
     : '';
   const patternCell = `<code>${escapeHtml(row.raw)}</code>${variantBadge}`;
 
@@ -255,7 +255,15 @@ function renderRow(row) {
   if (row.status === 'fetching') statusCell = `<span class="status-fetching">⟳ fetching...</span>`;
   if (row.status === 'pending')  statusCell = `<span class="status-pending">…</span>`;
   if (row.status === 'stopped')  statusCell = `<span class="status-stopped" title="Run stopped. Click ↻ to retry this row.">⏸ stopped</span>`;
-  if (row.status === 'live')     statusCell = `<span class="status-live">✓ just now</span>`;
+  if (row.status === 'live') {
+    // "just now" is only honest within the first minute. Beyond that, treat
+    // a persisted 'live' row like a cache hit and show the timestamp — so
+    // reopening yesterday's tab doesn't keep claiming "just now" forever.
+    const fresh = result?.fetchedAt && (Date.now() - result.fetchedAt) < 60_000;
+    statusCell = fresh
+      ? `<span class="status-live">✓ just now</span>`
+      : `<span class="status-cached">✓ ${formatAge(result.fetchedAt)}</span>`;
+  }
   if (row.status === 'cached')   statusCell = `<span class="status-cached">✓ ${formatAge(result.fetchedAt)}</span>`;
   if (row.status === 'blocked')  statusCell = `<span class="status-blocked">⛔ CAPTCHA</span>`;
   if (row.status === 'error') {
