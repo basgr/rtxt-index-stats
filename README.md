@@ -361,6 +361,10 @@ rtxt-index-stats/
 
 ---
 
+## Privacy
+
+No data collection, no telemetry, no remote logging. The extension only fetches the site's `robots.txt` and runs Google search queries through your normal browser session. See [PRIVACY.md](PRIVACY.md) for details.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
