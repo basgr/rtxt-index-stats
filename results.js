@@ -83,15 +83,42 @@ async function init() {
     if (msg.host !== host) return;
     if (msg.type === 'run:meta') onMeta(msg);
     else if (msg.type === 'run:row') upsertRow(msg.row);
+    else if (msg.type === 'run:rows') for (const row of msg.rows) upsertRow(row);
     else if (msg.type === 'run:state') { runStatus = msg.runStatus; updateProgress(); }
     else if (msg.type === 'run:done') { runStatus = 'done'; updateProgress(); }
     else if (msg.type === 'run:captcha') { runStatus = 'paused-captcha'; $('captcha-banner').hidden = false; updateProgress(); }
     else if (msg.type === 'run:confirm') { runStatus = 'awaiting-confirmation'; showConfirmBanner(msg); updateProgress(); }
   });
 
+  // Catch up from persisted state. Handles the rare case where the
+  // background's broadcast happened before this page's listener was
+  // ready (e.g. cached robots.txt → doRun finishes in <100ms).
+  await replayFromStorage();
+
   // Tell background to start. With existing state, this just replays —
   // it will not auto-start work.
   chrome.runtime.sendMessage({ type: 'startRun', host });
+}
+
+async function replayFromStorage() {
+  const obj = await chrome.storage.local.get(`run:${host}`);
+  const state = obj[`run:${host}`];
+  if (!state) return;
+  onMeta({
+    robotsStatus: state.robotsStatus,
+    robots: state.robots,
+    ruleCount: state.rules?.length ?? 0,
+    startedAt: state.startedAt,
+    runStatus: state.runStatus,
+  });
+  if (state.rules) for (const row of state.rules) upsertRow(row);
+  if (state.runStatus === 'paused-captcha') {
+    $('captcha-banner').hidden = false;
+  } else if (state.runStatus === 'awaiting-confirmation') {
+    const n = state.rules?.filter(r =>
+      r.kind === 'queryable' && (r.status === 'pending' || !r.status)).length ?? 0;
+    showConfirmBanner({ queryableCount: n, minMs: n * 10_000, maxMs: n * 30_000 });
+  }
 }
 
 // Authoritative run state mirrored from background. Drives banners + buttons.
