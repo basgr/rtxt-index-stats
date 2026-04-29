@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Robots Disallow Checker",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Audit which paths a site disallows in robots.txt and how many of them Google has indexed anyway.",
   "action": {
     "default_title": "Robots Disallow Checker",
