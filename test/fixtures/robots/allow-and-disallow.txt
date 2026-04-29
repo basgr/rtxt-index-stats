@@ -1,0 +1,16 @@
+# Blanket disallow with carved-out subpaths (typical AEM-style shape).
+User-agent: *
+
+Disallow: /content/
+
+# Carved-out asset directories
+Allow: /content/dam/assets/corporate/
+Allow: /content/dam/assets/pricelists/
+Allow: /content/dam/assets/categories/
+Allow: /content/dam/assets/marketplace/
+
+# Technical pages
+Disallow: /errorpages/
+Disallow: /maintenance/
+
+Sitemap: https://www.example.com/sitemap.xml

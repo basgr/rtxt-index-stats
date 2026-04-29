@@ -225,7 +225,15 @@ function renderRow(row) {
   const variantBadge = row.variants && row.variants.length > 1
     ? ` <span class="variant-badge" tabindex="0" title="Also matches: ${escapeHtml(row.variants.slice(1).join(', '))}">+${row.variants.length - 1}</span>`
     : '';
-  const patternCell = `<code>${escapeHtml(row.raw)}</code>${variantBadge}`;
+  let allowBadge = '';
+  if (row.excludedAllows && row.excludedAllows.length) {
+    const dropped = row.droppedAllows || [];
+    const tip = `Allow: exceptions carved out of this Disallow (count excludes URLs under these paths):\n  · ${row.excludedAllows.join('\n  · ')}` +
+      (dropped.length ? `\n\nNot applied (over the 10-exclusion cap, count is an upper bound):\n  · ${dropped.join('\n  · ')}` : '');
+    const warn = dropped.length ? ' ⚠' : '';
+    allowBadge = ` <span class="variant-badge variant-badge-allow" tabindex="0" title="${escapeHtml(tip)}">−${row.excludedAllows.length}${warn}</span>`;
+  }
+  const patternCell = `<code>${escapeHtml(row.raw)}</code>${variantBadge}${allowBadge}`;
 
   if (row.kind === 'skipped') {
     return `

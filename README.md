@@ -74,9 +74,9 @@ The fetch layer (`lib/robots-fetch.js`) handles the common failure modes explici
 | `networkError` | DNS/TLS/connection failure. |
 | `timeout` | Didn't respond within 15s. |
 
-On `ok`, the parser (`lib/robots-parser.js`) pulls out the `Disallow` values from every `User-agent: Googlebot` block and every `User-agent: *` block, strips BOM and inline `#` comments, and drops empty-valued `Disallow:` lines (which mean "allow everything"). The two lists are concatenated and deduped in-order before being handed to the normalizer.
+On `ok`, the parser (`lib/robots-parser.js`) pulls out the `Disallow` and `Allow` values from every `User-agent: Googlebot` block and every `User-agent: *` block, strips BOM and inline `#` comments, and drops empty-valued lines. The two lists are concatenated and deduped in-order before being handed to the normalizer.
 
-Other crawler blocks (Bingbot, etc.) and other directives (`Allow`, `Sitemap`, `Crawl-delay`, `Host`) are out of scope — see [Known limitations](#known-limitations).
+`Allow:` rules carve out exceptions from broader Disallows — see [Allow exceptions](#10-allow-exceptions) below. Other crawler blocks (Bingbot, etc.) and other directives (`Sitemap`, `Crawl-delay`, `Host`) are out of scope — see [Known limitations](#known-limitations).
 
 ### Compatibility with Google's reference parser
 
@@ -221,7 +221,36 @@ Percent-encoded UTF-8 is decoded before building the query, both in path prefixe
 
 A pattern that doesn't match any of the above (e.g., `?` with no extractable tokens, wildcards with no usable suffix) is marked `skipped` with `reason: 'unsupported pattern shape'`.
 
-### 10. Deduplication across variants
+### 10. Allow exceptions
+
+A `Disallow:` rule can be carved by one or more `Allow:` rules under the same User-agent block (AEM-driven sites and many CMSes use this pattern):
+
+```
+User-agent: *
+Disallow: /content/
+Allow: /content/dam/assets/pricelists/
+Allow: /content/dam/assets/marketplace/
+```
+
+The normalizer attributes each Allow to the longest matching Disallow path (per robots.txt longest-match semantics) and appends it to that row's query as a `-inurl:` exclusion:
+
+| Pattern | Query | Approximate? |
+|---|---|---|
+| `Disallow: /content/` (with the two Allows above) | `site:host/content/ -inurl:/content/dam/assets/pricelists/ -inurl:/content/dam/assets/marketplace/` | **yes** |
+
+The row gets a **−N** badge in the Pattern column showing how many Allows were applied (hover for the full list). The row is also flagged approximate, because `-inurl:` is substring-based — it can over-exclude URLs that contain the path fragment elsewhere.
+
+**Cap and overflow.** Up to **10** exclusions per query (Google's `q=` parameter has a practical ~2K char limit; 10 leaves headroom). Anything beyond is listed in `droppedAllows` and surfaced as a `⚠` marker in the badge tooltip — when overflowed, the count is an upper bound for the dropped paths.
+
+**Attribution rules.**
+- An Allow path is attributed to the Disallow whose anchor (the path before any wildcard) is the longest prefix of the Allow path.
+- Orphan Allows (no matching Disallow prefix) are silently dropped.
+- An Allow that exactly equals a Disallow's anchor *fully nullifies* the Disallow — the row is moved to skipped with reason `fully allowed by Allow: <path>`.
+- `$`-anchored Disallows have no usable anchor (they match an exact URL only), so they don't receive Allow attribution.
+
+**v1 limitations.** Only plain-prefix Allows are applied. Allows with mid-path wildcards (`Allow: /content/*/public/`) or filetype anchors (`Allow: /*.css$`) are silently dropped — the Disallow row's count remains an upper bound for the URLs they would have carved out.
+
+### 11. Deduplication across variants
 
 `normalizeAndDedupe` groups rows by their Google `query` string. When multiple Disallow lines produce the same query, they collapse:
 
@@ -284,7 +313,7 @@ Two behaviors worth knowing:
 ## Development
 
 ```bash
-npm test   # run the Node test suite (72 tests, no deps)
+npm test   # run the Node test suite (88 tests, no deps)
 ```
 
 Tests use Node's built-in test runner. They cover the pattern normalizer, the robots parser, the Google-response parser, and the HTML helpers. Everything else (orchestrator, fetch, Chrome APIs) is exercised manually in Chrome.
@@ -325,7 +354,7 @@ rtxt-index-stats/
 
 ## Known limitations
 
-- **Other crawlers and other directives are out of scope.** Only `User-agent: Googlebot` and `User-agent: *` blocks are read. `Allow:`, `Sitemap:`, `Crawl-delay:`, and `Host:` are ignored. Notably, `Allow:` rules that carve exceptions out of a broader `Disallow:` are not subtracted — every Disallow is treated as a flat blacklist entry. Counts remain a useful *upper bound* for audit purposes; just don't read them as exact.
+- **Other crawlers and other directives are out of scope.** Only `User-agent: Googlebot` and `User-agent: *` blocks are read. `Sitemap:`, `Crawl-delay:`, and `Host:` are ignored. `Allow:` IS handled for plain-prefix carve-outs (see [Allow exceptions](#10-allow-exceptions)); Allows with mid-path wildcards or filetype anchors are silently dropped, so the Disallow row's count stays an upper bound for those carve-outs.
 - **Google is a prefix-matcher, robots.txt isn't quite.** See the [exact vs. approximate](#exact-vs-approximate) discussion above. Counts marked with `~` or with a `$` variant in the `+N` badge should be read as upper / lower bounds, not exact.
 - **Google's result counts are inherently fuzzy.** Google sometimes reports "About N results" that changes between requests. Counts near zero and very large counts are more reliable than mid-range ones.
 - **Single Chrome profile.** The fetch goes out with whatever cookies + UA the user has in Chrome. Running from a profile that's signed into Google is fine; running from one that isn't is also fine. The counts are public.

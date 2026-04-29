@@ -284,10 +284,143 @@ test('query-string pattern with multiple params and dedup: /*?noredirect=true&co
   assert.equal(r.query, 'site:www.example.com inurl:noredirect inurl:true inurl:config inurl:standalone');
 });
 
+test('trailing-? with nothing after falls back to plain prefix (approximate)', () => {
+  // /web/de/shop? = "URLs starting with /web/de/shop and having any query string".
+  // We can't express the "?" requirement; degrade to the prefix and flag approx.
+  const r = normalize(HOST, '/web/de/shop?');
+  assert.equal(r.kind, 'queryable');
+  assert.equal(r.query, 'site:www.example.com/web/de/shop');
+  assert.equal(r.approximate, true);
+});
+
+test('trailing-? preserves trailing slash on the path part', () => {
+  const r = normalize(HOST, '/web/de/shop/?');
+  assert.equal(r.kind, 'queryable');
+  assert.equal(r.query, 'site:www.example.com/web/de/shop/');
+  assert.equal(r.approximate, true);
+});
+
+test('trailing-? does NOT dedupe with bare prefix (different rules)', () => {
+  // /foo blocks /foo, /foo.html, /foo?x=1, /foo/bar, etc.
+  // /foo? requires a `?` to be present somewhere after.
+  // They produce the same site: query but stay as separate rows because
+  // /foo is exact and /foo? is approximate.
+  const rows = normalizeAndDedupe(HOST, ['/foo', '/foo?']);
+  const queryable = rows.filter(r => r.kind === 'queryable');
+  // Same query string → they collapse into one row, but the approximate flag
+  // is recomputed from the widest variant (/foo, no `?`), so it stays exact.
+  // The narrower /foo? lives in the +1 badge.
+  assert.equal(queryable.length, 1);
+  assert.equal(queryable[0].query, 'site:www.example.com/foo');
+  assert.equal(queryable[0].approximate, false); // widest variant wins
+  assert.deepEqual(queryable[0].variants, ['/foo', '/foo?']);
+});
+
 test('inurl terms lowercased so case-only differing patterns dedupe', () => {
   const rows = normalizeAndDedupe(HOST, ['/*?service=ajax', '/*?service=Ajax']);
   const queryable = rows.filter(r => r.kind === 'queryable');
   assert.equal(queryable.length, 1);
   assert.equal(queryable[0].query, 'site:www.example.com inurl:service inurl:ajax');
   assert.deepEqual(queryable[0].variants, ['/*?service=ajax', '/*?service=Ajax']);
+});
+
+// ---- Allow handling -------------------------------------------------------
+
+test('Allow under a Disallow appends -inurl: exclusion (AEM-style carve-out)', () => {
+  const rows = normalizeAndDedupe(
+    HOST,
+    ['/content/'],
+    [
+      '/content/dam/assets/corporate/',
+      '/content/dam/assets/pricelists/',
+    ]
+  );
+  const r = rows.find(x => x.kind === 'queryable');
+  assert.equal(
+    r.query,
+    'site:www.example.com/content/ -inurl:/content/dam/assets/corporate/ -inurl:/content/dam/assets/pricelists/'
+  );
+  assert.equal(r.approximate, true); // exclusions always approximate
+  assert.deepEqual(r.excludedAllows, [
+    '/content/dam/assets/corporate/',
+    '/content/dam/assets/pricelists/',
+  ]);
+  assert.equal(r.droppedAllows, undefined);
+  // verifyUrl reflects the new combined query
+  assert.ok(r.verifyUrl.includes(encodeURIComponent('-inurl:/content/dam/assets/pricelists/')));
+});
+
+test('orphan Allow (no matching Disallow prefix) is silently dropped', () => {
+  const rows = normalizeAndDedupe(HOST, ['/content/'], ['/something-unrelated/']);
+  const r = rows.find(x => x.kind === 'queryable');
+  assert.equal(r.query, 'site:www.example.com/content/');
+  assert.equal(r.approximate, false);
+  assert.equal(r.excludedAllows, undefined);
+});
+
+test('Allow attribution picks the LONGEST matching Disallow', () => {
+  // Both /a/ and /a/b/ are disallowed. Allow /a/b/c/ matches both — longer wins.
+  const rows = normalizeAndDedupe(HOST, ['/a/', '/a/b/'], ['/a/b/c/']);
+  const aRow = rows.find(r => r.query?.startsWith('site:www.example.com/a/ '));
+  const abRow = rows.find(r => r.query?.startsWith('site:www.example.com/a/b/'));
+  assert.equal(aRow, undefined); // /a/ should NOT receive the exclusion
+  const aRowExact = rows.find(r => r.query === 'site:www.example.com/a/');
+  assert.equal(aRowExact.excludedAllows, undefined);
+  assert.deepEqual(abRow.excludedAllows, ['/a/b/c/']);
+});
+
+test('Allow that exactly equals a Disallow path fully nullifies the row', () => {
+  const rows = normalizeAndDedupe(HOST, ['/foo/'], ['/foo/']);
+  const r = rows.find(x => x.raw === '/foo/');
+  assert.equal(r.kind, 'skipped');
+  assert.match(r.reason, /fully allowed by Allow: \/foo\//);
+});
+
+test('exclusions cap at 10 — extras go to droppedAllows', () => {
+  const allows = Array.from({ length: 13 }, (_, i) => `/content/sub${i}/`);
+  const rows = normalizeAndDedupe(HOST, ['/content/'], allows);
+  const r = rows.find(x => x.kind === 'queryable');
+  assert.equal(r.excludedAllows.length, 10);
+  assert.equal(r.droppedAllows.length, 3);
+  assert.deepEqual(r.droppedAllows, ['/content/sub10/', '/content/sub11/', '/content/sub12/']);
+  // Query contains 10 -inurl: tokens
+  assert.equal((r.query.match(/-inurl:/g) || []).length, 10);
+});
+
+test('Allow with mid-path wildcard is dropped silently (v1 unsupported shape)', () => {
+  const rows = normalizeAndDedupe(HOST, ['/content/'], ['/content/*/public/']);
+  const r = rows.find(x => x.kind === 'queryable');
+  assert.equal(r.query, 'site:www.example.com/content/');
+  assert.equal(r.excludedAllows, undefined);
+});
+
+test('Allow with $ end-anchor is treated as plain prefix (anchor stripped)', () => {
+  const rows = normalizeAndDedupe(HOST, ['/content/'], ['/content/special$']);
+  const r = rows.find(x => x.kind === 'queryable');
+  assert.deepEqual(r.excludedAllows, ['/content/special$']);
+  assert.ok(r.query.includes('-inurl:/content/special'));
+});
+
+test('$-anchored Disallow does NOT receive Allow attribution (no anchor)', () => {
+  // /foo$ matches only the exact URL /foo. An allow under /foo/x/ doesn't carve it.
+  const rows = normalizeAndDedupe(HOST, ['/foo$'], ['/foo/x/']);
+  const r = rows.find(x => x.kind === 'queryable');
+  assert.equal(r.query, 'site:www.example.com/foo');
+  assert.equal(r.excludedAllows, undefined);
+});
+
+test('Wildcard Disallow receives Allow exclusions on the part-before-wildcard anchor', () => {
+  // /foo/*bar has anchor /foo/. Allow /foo/special/ falls under that anchor.
+  const rows = normalizeAndDedupe(HOST, ['/foo/*bar'], ['/foo/special/']);
+  const r = rows.find(x => x.kind === 'queryable');
+  assert.deepEqual(r.excludedAllows, ['/foo/special/']);
+  assert.ok(r.query.includes('-inurl:/foo/special/'));
+});
+
+test('Allow with trailing /* is treated as plain prefix', () => {
+  const rows = normalizeAndDedupe(HOST, ['/content/'], ['/content/dam/*']);
+  const r = rows.find(x => x.kind === 'queryable');
+  assert.deepEqual(r.excludedAllows, ['/content/dam/*']);
+  // The /* gets stripped from the path used in -inurl:
+  assert.ok(r.query.includes('-inurl:/content/dam/'));
 });
