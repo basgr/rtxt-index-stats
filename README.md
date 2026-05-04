@@ -25,7 +25,7 @@ Because: A site can ask Googlebot not to crawl certain paths, but those URLs can
 ## Install
 
 **From the Chrome Web Store (recommended):**
-[chromewebstore.google.com/detail/robots-disallow-checker/dbpjmgbbackcbapklemkioiincppmooi](https://chromewebstore.google.com/detail/robots-disallow-checker/dbpjmgbbackcbapklemkioiincppmooi)
+[Click here](https://chromewebstore.google.com/detail/robots-disallow-checker/dbpjmgbbackcbapklemkioiincppmooi)
 
 One-click install, auto-updates with new releases.
 
