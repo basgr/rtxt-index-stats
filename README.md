@@ -24,6 +24,13 @@ Because: A site can ask Googlebot not to crawl certain paths, but those URLs can
 
 ## Install
 
+**From the Chrome Web Store (recommended):**
+[chromewebstore.google.com/detail/robots-disallow-checker/dbpjmgbbackcbapklemkioiincppmooi](https://chromewebstore.google.com/detail/robots-disallow-checker/dbpjmgbbackcbapklemkioiincppmooi)
+
+One-click install, auto-updates with new releases.
+
+**From source (for development or to run an unreleased build):**
+
 1. Get the code: `git clone https://github.com/basgr/rtxt-index-stats.git`, or download via **<> Code > Download ZIP** and unzip.
 2. Open `chrome://extensions` and toggle **Developer mode** (top right).
 3. Click **Load unpacked** and select the project directory.
